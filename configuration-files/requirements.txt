@@ -1,0 +1,23 @@
+# Core MCP and AI dependencies
+mcp>=1.0.0
+anthropic>=0.39.0
+
+# Image processing
+pillow>=10.0.0
+
+# QR code generation
+qrcode[pil]>=7.4.2
+
+# Video processing
+moviepy>=1.0.3
+imageio-ffmpeg>=0.4.9
+
+# Text-to-speech
+pyttsx3>=2.90
+
+# HTTP utilities
+httpx>=0.25.0
+
+# Optional: For better fonts on Linux
+# Uncomment if needed:
+# python-fontconfig
