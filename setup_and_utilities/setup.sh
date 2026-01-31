@@ -12,7 +12,7 @@ echo ""
 
 # Check Python version
 echo "📋 Checking Python version..."
-python_version=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
+python_version=$(python --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
 required_version="3.10"
 
 if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then 
@@ -27,14 +27,14 @@ echo "🔧 Creating virtual environment..."
 if [ -d "venv" ]; then
     echo "   Virtual environment already exists"
 else
-    python3 -m venv venv
+    python -m venv venv
     echo "✅ Virtual environment created"
 fi
 echo ""
 
 # Activate virtual environment
 echo "🔌 Activating virtual environment..."
-source venv/bin/activate
+source venv/Scripts/activate
 echo "✅ Virtual environment activated"
 echo ""
 

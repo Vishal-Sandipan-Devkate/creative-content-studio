@@ -13,37 +13,55 @@ This client demonstrates:
 import asyncio
 import json
 import os
-import sys
 from typing import Optional
+from pathlib import Path
+from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from anthropic import Anthropic
+import sys
 
-# Initialize Anthropic client
-anthropic_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+from numpy import rint
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
+anthropic_client = Anthropic(
+    api_key=os.getenv("ANTHROPIC_API_KEY")
+)
 
+if not anthropic_client.api_key:
+    raise RuntimeError("ANTHROPIC_API_KEY not found in .env")
 class ContentStudioAgent:
     """AI Agent that manages creative content generation tasks"""
     
     def __init__(self):
         self.session: Optional[ClientSession] = None
         self.available_tools = []
-    
-    def format_tools_for_claude(self) -> list[dict]:
-        """Convert MCP tools to Claude API format"""
-        claude_tools = []
         
-        for tool in self.available_tools:
-            claude_tool = {
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.inputSchema
-            }
-            claude_tools.append(claude_tool)
-        
-        return claude_tools
-    
+    async def connect_to_server(self, server_script_path: str):
+        from mcp.client.stdio import stdio_client
+        from mcp import ClientSession, StdioServerParameters
+
+        server_params = StdioServerParameters(
+            command=sys.executable,
+            args=[server_script_path],
+            env=None,
+        )
+
+    # IMPORTANT: keep this context alive
+        self._stdio_cm = stdio_client(server_params)
+        self._read, self._write = await self._stdio_cm.__aenter__()
+
+        self.session = ClientSession(self._read, self._write)
+        await self.session.initialize()
+
+        response = await self.session.list_tools()
+        self.available_tools = response.tools
+
+        print(f"✅ Connected to MCP server")
+        print(f"📦 Tools discovered: {[t.name for t in self.available_tools]}")
+
+
     async def call_tool(self, tool_name: str, tool_input: dict) -> str:
         """Execute a tool via MCP and return the result"""
         try:
@@ -85,7 +103,7 @@ class ContentStudioAgent:
         
         # Agent reasoning loop
         for iteration in range(max_iterations):
-            print(f"\n��� Agent Iteration {iteration + 1}/{max_iterations}")
+            print(f"\n🤖 Agent Iteration {iteration + 1}/{max_iterations}")
             
             # Call Claude with available tools
             response = anthropic_client.messages.create(
@@ -111,7 +129,7 @@ class ContentStudioAgent:
                         tool_name = block.name
                         tool_input = block.input
                         
-                        print(f"   ��� Calling tool: {tool_name}")
+                        print(f"   🔧 Calling tool: {tool_name}")
                         print(f"      Input: {json.dumps(tool_input, indent=2)[:100]}...")
                         
                         # Execute the tool
@@ -148,10 +166,19 @@ class ContentStudioAgent:
         
         return "Agent reached maximum iterations without completing task"
     
+    async def cleanup(self):
+        if self.session:
+            await self.session.close()
+            
+        if hasattr(self, "_stdio_cm"):
+            await self._stdio_cm.__aexit__(None, None, None)
+
+
+    
     async def interactive_mode(self):
         """Run the agent in interactive chat mode"""
         print("=" * 70)
-        print("��� CREATIVE CONTENT STUDIO - AI AGENT")
+        print("🎨 CREATIVE CONTENT STUDIO - AI AGENT")
         print("=" * 70)
         print("\nWhat would you like to create today?")
         print("\nExamples:")
@@ -166,7 +193,7 @@ class ContentStudioAgent:
                 user_input = input("You: ").strip()
                 
                 if user_input.lower() in ['quit', 'exit', 'q']:
-                    print("\n��� Goodbye!")
+                    print("\n👋 Goodbye!")
                     break
                 
                 if not user_input:
@@ -175,7 +202,7 @@ class ContentStudioAgent:
                 # Process the query
                 response = await self.process_query(user_input)
                 
-                print(f"\n🤖 Agent: {response}\n")
+                print(f"\n🎨 Agent: {response}\n")
                 print("-" * 70)
             
             except KeyboardInterrupt:
@@ -184,30 +211,26 @@ class ContentStudioAgent:
             except Exception as e:
                 print(f"\n❌ Error: {str(e)}\n")
 
-
 async def main():
-    """Main entry point"""
     import sys
-    
-    # Check for API key
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("❌ Error: ANTHROPIC_API_KEY environment variable not set")
-        print("Please set it with: export ANTHROPIC_API_KEY='your-key-here'")
         sys.exit(1)
-    
-    # Determine server script path
-    if len(sys.argv) > 1:
-        server_path = sys.argv[1]
-    else:
-        server_path = "content_studio_server.py"
-    
-    # Create and run agent
+
+    server_path = sys.argv[1] if len(sys.argv) > 1 else "content_studio_server.py"
+
     agent = ContentStudioAgent()
-    
-    await agent.connect_to_server(server_path)
-    await agent.run()
 
+    server_params = StdioServerParameters(
+        command="python",
+        args=[server_path],
+        env=None
+    )
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    async with stdio_client(server_params) as (stdio, write):
+        session = ClientSession(stdio, write)
+        await session.initialize()
 
+        await agent.connect_to_server(session)
+        await agent.interactive_mode()

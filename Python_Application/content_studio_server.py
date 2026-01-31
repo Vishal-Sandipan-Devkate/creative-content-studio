@@ -18,21 +18,22 @@ from pathlib import Path
 import uuid
 from datetime import datetime
 import json
+import sys
 
 # Try to import optional dependencies with graceful fallbacks
+# Optional dependencies (NO stdout logging!)
 try:
-    from moviepy.editor import ImageClip, concatenate_videoclips, CompositeVideoClip
+    from moviepy.editor import ImageClip, concatenate_videoclips
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
-    print("Warning: moviepy not available. Video features will be limited.")
 
 try:
     import pyttsx3
     TTS_AVAILABLE = True
 except ImportError:
     TTS_AVAILABLE = False
-    print("Warning: pyttsx3 not available. Text-to-speech will be limited.")
+
 
 # Initialize MCP server
 server = FastMCP("ContentStudio")
@@ -43,13 +44,18 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Default font fallback
 def get_font(size=40):
-    """Get a font, with fallback to default if custom font not available"""
     try:
-        # Try to use a nice font if available
-        return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+        # Windows
+        return ImageFont.truetype("arial.ttf", size)
     except:
-        # Fallback to default font
-        return ImageFont.load_default()
+        try:
+            # Linux
+            return ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                size
+            )
+        except:
+            return ImageFont.load_default()
 
 
 @server.tool()
@@ -533,4 +539,3 @@ async def create_social_card(
 if __name__ == "__main__":
     # Run the MCP server
     server.run()
-
